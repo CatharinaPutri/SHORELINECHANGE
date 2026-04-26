@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shoreline Change Analysis — Geomatika UGM</title>
+
+    <meta
+        name="description"
+        content="Web application for shoreline extraction and shoreline change analysis using Google Earth Engine, Random Forest, and SCA metrics."
+    />
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    />
+
+    <!-- Icons -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+    <noscript>
+        <div style="padding:12px;background:#ef476f;color:white;text-align:center;font-family:Inter,sans-serif;">
+            JavaScript is required to run this application.
+        </div>
+    </noscript>
+
+    <!-- ========================================================= -->
+    <!-- TOP NAVBAR                                                 -->
+    <!-- ========================================================= -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <i class="fas fa-water"></i>
+            <div>
+                <span class="brand-title">Shoreline Change Analysis</span>
+                <span class="brand-subtitle">Magister Teknik Geomatika — Universitas Gadjah Mada</span>
+            </div>
+        </div>
+
+        <div class="navbar-status">
+            <span class="gee-status" id="geeStatus">
+                <i class="fas fa-circle"></i> GEE: Not Connected
+            </span>
+        </div>
+    </nav>
+
+    <!-- ========================================================= -->
+    <!-- MAIN APP                                                   -->
+    <!-- ========================================================= -->
+    <div class="app-container">
+        <!-- ===================================================== -->
+        <!-- SIDEBAR                                                -->
+        <!-- ===================================================== -->
+        <aside class="sidebar" id="sidebar">
+            <button
+                class="sidebar-toggle"
+                id="sidebarToggle"
+                type="button"
+                aria-label="Toggle sidebar"
+            >
+                <i class="fas fa-chevron-left"></i>
+            </button>
+
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <button class="tab-btn active" type="button" data-tab="tab-gee">
+                    <i class="fas fa-satellite"></i>
+                    <span>Dataset</span>
+                </button>
+
+                <button class="tab-btn" type="button" data-tab="tab-shoreline">
+                    <i class="fas fa-wave-square"></i>
+                    <span>Shoreline</span>
+                </button>
+
+                <button class="tab-btn" type="button" data-tab="tab-sca">
+                    <i class="fas fa-chart-line"></i>
+                    <span>SCA</span>
+                </button>
+
+                <button class="tab-btn" type="button" data-tab="tab-layers">
+                    <i class="fas fa-layer-group"></i>
+                    <span>Layers</span>
+                </button>
+            </div>
+
+            <!-- ================================================= -->
+            <!-- TAB 1: GEE                                         -->
+            <!-- ================================================= -->
+            <section class="tab-content active" id="tab-gee">
+                <div class="panel-section">
+                    <h3><i class="fas fa-key"></i> GEE Authentication</h3>
+                    <div class="form-group">
+                        <label for="geeProjectId">GEE Project ID</label>
+                        <input
+                            type="text"
+                            id="geeProjectId"
+                            placeholder="e.g. ee-yourproject"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <button class="btn btn-primary btn-block" id="btnGeeInit" type="button">
+                        <i class="fas fa-plug"></i> Connect to GEE
+                    </button>
+                </div>
+
+                <div class="panel-section">
+                    <h3><i class="fas fa-globe-asia"></i> Area of Interest</h3>
+                    <p class="hint">
+                        Draw a polygon or rectangle on the map to define the Area of Interest.
+                    </p>
+                    <div class="roi-info" id="roiInfo">
+                        <span class="tag tag-muted">No ROI defined</span>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3><i class="fas fa-calendar-alt"></i> Dataset Parameters</h3>
+
+                    <div id="datasetEntries">
+                        <div class="dataset-card" data-index="0">
+                            <div class="dataset-header">
+                                <span class="dataset-badge">Dataset 1</span>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Year Label</label>
+                                    <input type="text" class="ds-year" value="2018" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Cloud Max (%)</label>
+                                    <input type="number" class="ds-cloud" value="15" min="0" max="100" />
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Start Date</label>
+                                    <input type="date" class="ds-start" value="2018-01-01" />
+                                </div>
+                                <div class="form-group">
+                                    <label>End Date</label>
+                                    <input type="date" class="ds-end" value="2018-12-31" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-outline btn-block" id="btnAddDataset" type="button">
+                        <i class="fas fa-plus"></i> Add Dataset
+                    </button>
+                </div>
+
+                <div class="panel-section">
+                    <button class="btn btn-success btn-block" id="btnGeneratePreview" type="button">
+                        <i class="fas fa-eye"></i> Preview on Map
+                    </button>
+
+                    <button
+                        class="btn btn-primary btn-block"
+                        id="btnExportDrive"
+                        type="button"
+                        style="margin-top:8px;"
+                    >
+                        <i class="fab fa-google-drive"></i> Export to Drive
+                    </button>
+                </div>
+            </section>
+
+            <!-- ================================================= -->
+            <!-- TAB 2: SHORELINE                                   -->
+            <!-- ================================================= -->
+            <section class="tab-content" id="tab-shoreline">
+                <div class="panel-section">
+                    <h3><i class="fas fa-upload"></i> Upload GeoTIFF</h3>
+                    <p class="hint">
+                        Upload the 7-band composite GeoTIFF exported from GEE for each year.
+                    </p>
+
+                    <div id="uploadEntries">
+                        <div class="upload-card">
+                            <div class="form-group">
+                                <label>Year Label</label>
+                                <input type="text" class="ul-year" value="2018" />
+                            </div>
+                            <div class="file-input-wrapper">
+                                <input type="file" class="ul-file" accept=".tif,.tiff" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        class="btn btn-outline btn-block"
+                        id="btnAddUpload"
+                        type="button"
+                        style="margin-top:8px;"
+                    >
+                        <i class="fas fa-plus"></i> Add Upload
+                    </button>
+                </div>
+
+                <div class="panel-section">
+                    <button class="btn btn-success btn-block" id="btnExtractShoreline" type="button">
+                        <i class="fas fa-wave-square"></i> Extract Shoreline
+                    </button>
+                </div>
+
+                <div
+                    class="panel-section progress-container"
+                    id="shorelineProgress"
+                    style="display:none;"
+                >
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="shorelineProgressFill"></div>
+                    </div>
+                    <div class="progress-text" id="shorelineProgressText">Waiting...</div>
+                </div>
+
+                <div class="panel-section" id="shorelineResults" style="display:none;">
+                    <h3><i class="fas fa-list-check"></i> Extracted Shorelines</h3>
+                    <p class="hint">
+                        Each extracted shoreline year can be deleted individually. Deleting one year
+                        will also clear the current SCA result because the analysis becomes invalid.
+                    </p>
+                    <div id="shorelineResultsList"></div>
+                </div>
+            </section>
+
+            <!-- ================================================= -->
+            <!-- TAB 3: SCA                                         -->
+            <!-- ================================================= -->
+            <section class="tab-content" id="tab-sca">
+                <div class="panel-section">
+                    <h3><i class="fas fa-ruler-combined"></i> SCA Parameters</h3>
+
+                    <div class="form-group">
+                        <label for="scaRefYear">Reference Year</label>
+                        <select id="scaRefYear">
+                            <option value="">Select shoreline year</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scaOffset">Baseline Offset (m)</label>
+                            <input type="number" id="scaOffset" value="300" min="1" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="scaSpacing">Transect Spacing (m)</label>
+                            <input type="number" id="scaSpacing" value="50" min="1" />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scaPlacement">Baseline Placement</label>
+                            <select id="scaPlacement">
+                                <option value="land" selected>Land</option>
+                                <option value="sea">Sea</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Transect Length</label>
+                            <div class="tag tag-muted" style="margin-top:8px;display:inline-flex;">
+                                Auto
+                            </div>
+                            <p class="hint" style="margin-top:8px;">
+                                Computed automatically from extracted shoreline geometry.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <button class="btn btn-primary btn-block" id="btnRunSCA" type="button">
+                        <i class="fas fa-play"></i> Run SCA Analysis
+                    </button>
+                </div>
+
+                <div class="panel-section progress-container" id="scaProgress" style="display:none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="scaProgressFill"></div>
+                    </div>
+                    <div class="progress-text" id="scaProgressText">Waiting...</div>
+                </div>
+
+                <div class="panel-section" id="scaResults" style="display:none;">
+                    <h3><i class="fas fa-chart-column"></i> SCA Summary</h3>
+
+                    <div class="stats-grid" id="scaStatsGrid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="statTotalTransects">-</div>
+                            <div class="stat-label">Total Transects</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value" id="statAutoTransectLength">-</div>
+                            <div class="stat-label">Auto Transect Length</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value" id="statMeanNSM">-</div>
+                            <div class="stat-label">Mean NSM</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value" id="statMeanEPR">-</div>
+                            <div class="stat-label">Mean EPR</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value" id="statMeanSCE">-</div>
+                            <div class="stat-label">Mean SCE</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value" id="statMeanLRR">-</div>
+                            <div class="stat-label">Mean LRR</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value positive" id="statAccretionCount">-</div>
+                            <div class="stat-label">Accretion Count</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value negative" id="statErosionCount">-</div>
+                            <div class="stat-label">Erosion Count</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value" id="statStableCount">-</div>
+                            <div class="stat-label">Stable Count</div>
+                        </div>
+                    </div>
+
+                    <button
+                        class="btn btn-outline btn-block"
+                        id="btnDownloadSCA"
+                        type="button"
+                        style="margin-top:12px;"
+                    >
+                        <i class="fas fa-file-csv"></i> Download SCA CSV
+                    </button>
+                </div>
+            </section>
+
+            <!-- ================================================= -->
+            <!-- TAB 4: LAYERS                                      -->
+            <!-- ================================================= -->
+            <section class="tab-content" id="tab-layers">
+                <div class="panel-section">
+                    <h3><i class="fas fa-layer-group"></i> Active Layers</h3>
+                    <p class="hint">
+                        Toggle ROI boundary, composite previews, extracted shorelines, transects,
+                        and SCA result layers.
+                    </p>
+                    <div id="layerList"></div>
+                </div>
+
+                <div class="panel-section">
+                    <h3><i class="fas fa-rotate-left"></i> Session Controls</h3>
+                    <p class="hint">
+                        Clear only the map/session state in the browser, or fully reset the session
+                        and delete generated backend outputs.
+                    </p>
+
+                    <button class="btn btn-outline btn-block" id="btnClearMapResults" type="button">
+                        <i class="fas fa-eraser"></i> Clear Map Results
+                    </button>
+
+                    <button
+                        class="btn btn-primary btn-block"
+                        id="btnResetSession"
+                        type="button"
+                        style="margin-top:8px;"
+                    >
+                        <i class="fas fa-trash-can"></i> Reset Session &amp; Delete Outputs
+                    </button>
+                </div>
+            </section>
+        </aside>
+
+        <!-- ===================================================== -->
+        <!-- MAP                                                    -->
+        <!-- ===================================================== -->
+        <main class="map-wrapper">
+            <div id="map" aria-label="Interactive map"></div>
+
+            <div class="map-legend" id="mapLegend">
+                <h4>Legend</h4>
+                <div id="legendItems"></div>
+            </div>
+
+            <div class="map-info-box">
+                <span>
+                    <i class="fas fa-location-crosshairs"></i>
+                    <strong>Coords:</strong>
+                    <span id="mapCoords">-</span>
+                </span>
+                <span>
+                    <i class="fas fa-magnifying-glass"></i>
+                    <strong>Zoom:</strong>
+                    <span id="mapZoom">11</span>
+                </span>
+            </div>
+        </main>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- TOASTS                                                    -->
+    <!-- ========================================================= -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ========================================================= -->
+    <!-- LOADING OVERLAY                                           -->
+    <!-- ========================================================= -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Processing...</div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- SCRIPTS                                                   -->
+    <!-- ========================================================= -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
